@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Ular Tangga Ultimate - Reski Ardiansyah</title>
+    <style>
+        :root {
+            --p1-color: #d63031; /* Merah */
+            --p2-color: #0984e3; /* Biru */
+            --p3-color: #00b894; /* Hijau */
+            --p4-color: #fdcb6e; /* Kuning */
+            --board-light: #fdf5e6; /* OldLace */
+            --board-dark: #faebd7; /* AntiqueWhite */
+            --border-color: #5d4037; /* Coklat Tua */
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; font-family: 'Georgia', serif; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            background-color: #b2bec3;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden; /* Mencegah scroll agar terasa seperti aplikasi native */
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+
+        h1 { 
+            color: #2d3436; margin-bottom: 5px; text-align: center; text-transform: uppercase; 
+            letter-spacing: 1px; text-shadow: 1px 1px 0px white; font-size: 1.2rem;
+            flex-shrink: 0;
+        }
+
+        /* --- Style Khusus Link Portofolio --- */
+        .developer-credit {
+            font-size: 0.85rem;
+            color: #636e72;
+            margin-bottom: 8px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        .developer-credit a {
+            color: #2d3436;
+            text-decoration: none;
+            font-weight: bold;
+            border-bottom: 1px dashed #2d3436;
+            transition: all 0.3s ease;
+        }
+        .developer-credit a:hover {
+            color: #d63031; /* Berubah merah saat di-hover */
+            border-bottom-style: solid;
+        }
+
+        /* --- Container Utama (Side by Side) --- */
+        .game-wrapper {
+            display: flex; 
+            flex-direction: row; /* Selalu berjejer horizontal */
+            align-items: center;
+            justify-content: center;
+            width: 100%; 
+            height: 85%; /* Sesuaikan tinggi agar muat dengan header baru */
+            gap: 10px; 
+            padding: 0 10px;
+            background: transparent;
+        }
+
+        /* --- Papan (Menggunakan vmin agar pas di layar HP Portrait/Landscape) --- */
+        .board-container { 
+            position: relative; 
+            /* 75vmin artinya 75% dari sisi terpendek layar (Width jika portrait, Height jika landscape) */
+            width: 75vmin; 
+            height: 75vmin;
+            background-color: var(--board-light);
+            border: 4px solid var(--border-color);
+            border-radius: 4px;
+            flex-shrink: 0; /* Jangan mengecil */
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+        }
+        
+        #game-board {
+            display: grid; grid-template-columns: repeat(10, 1fr); grid-template-rows: repeat(10, 1fr);
+            width: 100%; height: 100%;
+        }
+
+        .cell {
+            display: flex; justify-content: flex-start; align-items: flex-start;
+            padding: 1px 2px; font-size: 0.6rem; color: #555; font-weight: bold; position: relative;
+        }
+        .cell.light { background-color: var(--board-light); }
+        .cell.dark { background-color: var(--board-dark); }
+
+        #overlay-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
+
+        /* --- Bidak Pemain --- */
+        .token {
+            width: 4vmin; height: 4vmin; /* Ukuran mengikuti layar */
+            min-width: 16px; min-height: 16px;
+            border-radius: 50%; position: absolute;
+            z-index: 10; border: 2px solid white; 
+            box-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            transition: top 0.3s ease, left 0.3s ease, transform 0.2s ease;
+            display: flex; justify-content: center; align-items: center; 
+            font-size: 0.6rem; color: white; font-weight: bold; font-family: sans-serif;
+        }
+        .token.walking { transition: none; } 
+        .token.hopping { animation: hop 0.3s cubic-bezier(0.45, 0.05, 0.55, 0.95); }
+        
+        @keyframes hop {
+            0% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -150%) scale(1.1); }
+            100% { transform: translate(-50%, -50%) scale(1); }
+        }
+
+        /* --- Panel Kontrol (Samping Kanan) --- */
+        .controls { 
+            flex: 1; 
+            height: 75vmin; /* Samakan tinggi dengan papan */
+            max-width: 250px; /* Batas lebar di desktop */
+            display: flex; flex-direction: column; 
+            background: rgba(255,255,255,0.9); padding: 10px; 
+            border-radius: 8px; border: 2px solid #b2bec3;
+            overflow-y: auto; /* Scroll jika konten terlalu panjang di HP kecil */
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        /* Layout khusus HP Sangat Kecil */
+        @media (max-width: 400px) {
+            .board-container { width: 65vmin; height: 65vmin; }
+            .controls { height: 65vmin; max-width: none; width: 28vmin; padding: 5px; }
+            h1 { font-size: 1rem; }
+            .developer-credit { font-size: 0.75rem; }
+        }
+
+        .player-card {
+            background: white; padding: 6px; border-radius: 4px;
+            margin-bottom: 5px; border-left: 5px solid transparent; transition: 0.2s;
+            display: flex; justify-content: space-between; align-items: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .player-card.active { transform: scale(1.02); background: #e3f2fd; box-shadow: 0 2px 5px rgba(0,0,0,0.15); border: 1px solid #2d3436; }
+        .p1 { border-left-color: var(--p1-color); }
+        .p2 { border-left-color: var(--p2-color); }
+        .p3 { border-left-color: var(--p3-color); }
+        .p4 { border-left-color: var(--p4-color); }
+        .p-name { font-weight: bold; font-size: 0.85rem; }
+        .p-pos { font-size: 0.75rem; color: #636e72; }
+
+        /* Dadu Kecil */
+        .dice-box {
+            width: 50px; height: 50px; perspective: 600px; margin: 10px auto; cursor: pointer;
+        }
+        .dice {
+            width: 100%; height: 100%; position: relative; transform-style: preserve-3d; transition: transform 1s ease-out;
+        }
+        .face {
+            position: absolute; width: 100%; height: 100%; background: white; border: 1px solid #333;
+            border-radius: 8px; display: flex; justify-content: center; align-items: center; font-size: 1.2rem; font-weight: bold; box-shadow: inset 0 0 5px rgba(0,0,0,0.2);
+        }
+        .face:nth-child(1) { transform: rotateY(0deg) translateZ(25px); }
+        .face:nth-child(2) { transform: rotateY(90deg) translateZ(25px); }
+        .face:nth-child(3) { transform: rotateY(180deg) translateZ(25px); }
+        .face:nth-child(4) { transform: rotateY(-90deg) translateZ(25px); }
+        .face:nth-child(5) { transform: rotateX(90deg) translateZ(25px); }
+        .face:nth-child(6) { transform: rotateX(-90deg) translateZ(25px); }
+
+        .btn-main {
+            background: #2d3436; color: white; border: none; padding: 8px 15px; border-radius: 5px;
+            font-size: 0.9rem; cursor: pointer; width: 100%; font-family: 'Georgia', serif;
+            box-shadow: 0 3px 0 #000; margin-bottom: 5px;
+        }
+        .btn-main:active { transform: translateY(3px); box-shadow: none; }
+        .btn-main:disabled { background: #b2bec3; box-shadow: none; cursor: not-allowed; transform: none; }
+        .btn-small { padding: 5px 10px; font-size: 0.8rem; background: #7f8c8c; }
+
+        .log-box {
+            flex: 1; /* Ambil sisa ruang */
+            width: 100%; overflow-y: auto; background: #dfe6e9;
+            padding: 5px; border-radius: 5px; font-size: 0.7rem; margin-top: 10px; border: 1px solid #b2bec3; font-family: sans-serif;
+        }
+        .log-entry { margin-bottom: 3px; padding-bottom: 3px; border-bottom: 1px dashed #b2bec3; word-wrap: break-word; }
+
+        /* --- Modal --- */
+        .modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center;
+            z-index: 100; opacity: 0; visibility: hidden; transition: 0.3s;
+        }
+        .modal.show { opacity: 1; visibility: visible; }
+        
+        .modal-content {
+            background: #fff; padding: 20px; border-radius: 10px; text-align: center; max-width: 300px; width: 90%;
+            border: 5px solid var(--p1-color); box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        .setup-options { display: flex; gap: 5px; justify-content: center; margin: 15px 0; }
+        .btn-opt {
+            padding: 10px 15px; border: 2px solid #2d3436; background: white; border-radius: 5px;
+            cursor: pointer; font-size: 1.2rem; font-weight: bold; transition: 0.2s; flex: 1; font-family: 'Georgia', serif;
+        }
+        .btn-opt:active { background: #f1f2f6; transform: scale(0.95); }
+
+    </style>
+</head>
+<body>
+
+    <h1>Ular Tangga Ultimate</h1>
+    <!-- Link Portofolio Pembuat -->
+    <div class="developer-credit">
+        Dibuat oleh <a href="https://ar0236879-w.github.io/Reski-Ardiansyah/portofolio%20Reski%20Ardiansyah.html" target="_blank">Reski Ardiansyah</a>
+    </div>
+
+    <div class="game-wrapper">
+        <!-- Papan (Kiri/Utama) -->
+        <div class="board-container">
+            <div id="game-board"></div>
+            <canvas id="overlay-canvas"></canvas>
+            <div id="tokens-container"></div>
+        </div>
+
+        <!-- Panel Kontrol (Kanan/Samping) -->
+        <aside class="controls">
+            <div id="players-list">
+                <!-- Kartu player digenerate JS -->
+            </div>
+
+            <div class="dice-box" id="dice-box">
+                <div class="dice" id="dice">
+                    <div class="face">1</div>
+                    <div class="face">2</div>
+                    <div class="face">3</div>
+                    <div class="face">4</div>
+                    <div class="face">5</div>
+                    <div class="face">6</div>
+                </div>
+            </div>
+
+            <button class="btn-main" id="roll-btn" onclick="rollDice()">Kocok</button>
+            <button class="btn-main btn-small" onclick="showSetup()">Reset</button>
+
+            <div class="log-box" id="game-log"></div>
+        </aside>
+    </div>
+
+    <!-- Modal Setup Awal -->
+    <div class="modal show" id="setup-modal">
+        <div class="modal-content" style="border-color: #2d3436;">
+            <h2>Mulai Game</h2>
+            <p>Jumlah Pemain:</p>
+            <div class="setup-options">
+                <button class="btn-opt" onclick="startGameSetup(2)">2</button>
+                <button class="btn-opt" onclick="startGameSetup(3)">3</button>
+                <button class="btn-opt" onclick="startGameSetup(4)">4</button>
+            </div>
+            <div style="margin-top:15px; font-size:0.8rem; color:#666;">
+                By <a href="https://ar0236879-w.github.io/Reski-Ardiansyah/portofolio%20Reski%20Ardiansyah.html" target="_blank" style="color:#2d3436;">Reski Ardiansyah</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Menang -->
+    <div class="modal" id="win-modal">
+        <div class="modal-content">
+            <h2 id="winner-text" style="color:var(--p1-color); margin-bottom:10px;">MENANG!</h2>
+            <p style="margin-bottom:15px; font-size: 1rem;">Selamat!</p>
+            <button class="btn-main" onclick="showSetup()">Main Lagi</button>
+            <div style="margin-top:15px; font-size:0.8rem; color:#666;">
+                By <a href="https://ar0236879-w.github.io/Reski-Ardiansyah/portofolio%20Reski%20Ardiansyah.html" target="_blank" style="color:#2d3436;">Reski Ardiansyah</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Konfigurasi ---
+        const colors = ['var(--p1-color)', 'var(--p2-color)', 'var(--p3-color)', 'var(--p4-color)'];
+        const names = ['Merah', 'Biru', 'Hijau', 'Kuning'];
+        
+        let players = [];
+        let currentPlayerIndex = 0;
+        let snakes = {};
+        let ladders = {};
+        let isRolling = false;
+        let isMoving = false;
+
+        // --- Audio System ---
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let audioCtx;
+
+        function initAudio() {
+            if (!audioCtx) audioCtx = new AudioContext();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        const sfx = {
+            step: () => {
+                if(!audioCtx) return;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(200, audioCtx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+            },
+            roll: () => {
+                if(!audioCtx) return;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(100, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(600, audioCtx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+            },
+            snake: () => {
+                if(!audioCtx) return;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(50, audioCtx.currentTime + 0.8);
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.8);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.8);
+            },
+            ladder: () => {
+                if(!audioCtx) return;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(800, audioCtx.currentTime + 0.5);
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.5);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.5);
+            },
+            win: () => {
+                if(!audioCtx) return;
+                const now = audioCtx.currentTime;
+                [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.connect(gain); gain.connect(audioCtx.destination);
+                    osc.type = 'sine'; osc.frequency.value = freq;
+                    const start = now + (i * 0.1);
+                    gain.gain.setValueAtTime(0, start);
+                    gain.gain.linearRampToValueAtTime(0.2, start + 0.05);
+                    gain.gain.exponentialRampToValueAtTime(0.01, start + 0.6);
+                    osc.start(start); osc.stop(start + 0.6);
+                });
+            }
+        };
+
+        // --- Logika Peta Acak ---
+        function generateRandomMap() {
+            snakes = {}; ladders = {};
+            const occupied = new Set();
+            occupied.add(1); occupied.add(100);
+
+            const getUnique = (min, max) => {
+                let num;
+                do {
+                    num = Math.floor(Math.random() * (max - min + 1)) + min;
+                } while (occupied.has(num));
+                return num;
+            };
+
+            for (let i = 0; i < 10; i++) {
+                let start = getUnique(2, 75);
+                let end = getUnique(start + 5, 98);
+                occupied.add(start); occupied.add(end);
+                ladders[start] = end;
+            }
+
+            for (let i = 0; i < 10; i++) {
+                let start = getUnique(15, 99);
+                let end = getUnique(2, start - 5);
+                occupied.add(start); occupied.add(end);
+                snakes[start] = end;
+            }
+        }
+
+        // --- Setup & Render ---
+        function showSetup() {
+            document.getElementById('setup-modal').classList.add('show');
+            document.getElementById('win-modal').classList.remove('show');
+        }
+
+        function startGameSetup(numPlayers) {
+            initAudio();
+            document.getElementById('setup-modal').classList.remove('show');
+            
+            players = [];
+            const listEl = document.getElementById('players-list');
+            const tokenContainer = document.getElementById('tokens-container');
+            listEl.innerHTML = '';
+            tokenContainer.innerHTML = '';
+
+            for(let i=0; i<numPlayers; i++) {
+                players.push({
+                    id: i+1, name: names[i], color: colors[i], pos: 1, element: null
+                });
+
+                listEl.innerHTML += `
+                    <div class="player-card p${i+1}" id="p-card-${i}">
+                        <div class="p-name" style="color:${colors[i]}">${names[i]}</div>
+                        <div class="p-pos" id="p-pos-${i}">1</div>
+                    </div>
+                `;
+
+                const t = document.createElement('div');
+                t.className = 'token';
+                t.style.backgroundColor = colors[i];
+                t.innerText = i+1;
+                tokenContainer.appendChild(t);
+                players[i].element = t;
+            }
+
+            currentPlayerIndex = 0;
+            generateRandomMap();
+            createBoardGrid();
+            drawVisuals();
+            updatePositions(false);
+            updateStatus();
+            document.getElementById('game-log').innerHTML = '<div class="log-entry">Peta baru! 10 Ular & 10 Tangga.</div>';
+        }
+
+        function createBoardGrid() {
+            const board = document.getElementById('game-board');
+            board.innerHTML = '';
+            
+            for (let row = 9; row >= 0; row--) {
+                let start = row * 10 + 1;
+                let end = start + 9;
+                let rowNumbers = [];
+                for (let i = start; i <= end; i++) rowNumbers.push(i);
+                if (row % 2 !== 0) rowNumbers.reverse();
+
+                let isDark = (row % 2 !== 0);
+
+                rowNumbers.forEach((num, colIndex) => {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    
+                    // Simple Checkerboard logic based on grid index
+                    let visualIndex = (row * 10) + colIndex;
+                    if (visualIndex % 2 === 0) cell.classList.add('light');
+                    else cell.classList.add('dark');
+                    
+                    cell.id = `cell-${num}`;
+                    cell.innerText = num;
+                    board.appendChild(cell);
+                });
+            }
+        }
+
+        // --- Gambar Visual (Canvas) ---
+        function drawVisuals() {
+            const canvas = document.getElementById('overlay-canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Resize canvas agar tajam
+            const container = document.querySelector('.board-container');
+            canvas.width = container.offsetWidth;
+            canvas.height = container.offsetHeight;
+
+            const getPos = (num) => {
+                const el = document.getElementById(`cell-${num}`);
+                if(!el) return {x:0, y:0};
+                const r = el.getBoundingClientRect();
+                return { 
+                    x: r.left - container.getBoundingClientRect().left + r.width/2, 
+                    y: r.top - container.getBoundingClientRect().top + r.height/2 
+                };
+            };
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 1. GAMBAR TANGGA
+            for (const [start, end] of Object.entries(ladders)) {
+                const s = getPos(start);
+                const e = getPos(end);
+                const dx = e.x - s.x; const dy = e.y - s.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                const ux = dx/dist; const uy = dy/dist;
+                const offset = 6; 
+                const lx = -uy * offset; const ly = ux * offset;
+
+                ctx.lineWidth = 4; ctx.strokeStyle = '#8d6e63';
+                ctx.beginPath(); ctx.moveTo(s.x + lx, s.y + ly); ctx.lineTo(e.x + lx, e.y + ly); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(s.x - lx, s.y - ly); ctx.lineTo(e.x - lx, e.y - ly); ctx.stroke();
+
+                ctx.lineWidth = 2; ctx.strokeStyle = '#5d4037';
+                const rungCount = Math.max(2, Math.floor(dist / 10));
+                for(let i=1; i<rungCount; i++) {
+                    const t = i / rungCount;
+                    const cx = s.x + dx * t; const cy = s.y + dy * t;
+                    ctx.beginPath(); ctx.moveTo(cx + lx, cy + ly); ctx.lineTo(cx - lx, cy - ly); ctx.stroke();
+                }
+            }
+
+            // 2. GAMBAR ULAR
+            for (const [start, end] of Object.entries(snakes)) {
+                const s = getPos(start);
+                const e = getPos(end);
+                const dx = e.x - s.x; const dy = e.y - s.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                const steps = Math.floor(dist / 5); 
+                const nx = -dy / dist; const ny = dx / dist;
+
+                ctx.beginPath();
+                ctx.strokeStyle = '#27ae60';
+                ctx.lineWidth = 8;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.moveTo(s.x, s.y);
+                for(let i=0; i<=steps; i++) {
+                    const t = i / steps;
+                    const bx = s.x + dx * t; const by = s.y + dy * t;
+                    const amp = 5 * Math.sin(t * Math.PI * 3 + Math.PI); 
+                    ctx.lineTo(bx + nx * amp, by + ny * amp);
+                }
+                ctx.stroke();
+
+                // Stripes
+                ctx.beginPath();
+                ctx.strokeStyle = '#1e8449';
+                ctx.lineWidth = 3;
+                for(let i=1; i<steps; i+=2) {
+                    const t = i / steps;
+                    const bx = s.x + dx * t; const by = s.y + dy * t;
+                    const amp = 5 * Math.sin(t * Math.PI * 3 + Math.PI); 
+                    const wx = bx + nx * amp; const wy = by + ny * amp;
+                    const perpX = (dx/dist) * 3; const perpY = (dy/dist) * 3;
+                    ctx.moveTo(wx - perpX, wy - perpY);
+                    ctx.lineTo(wx + perpX, wy + perpY);
+                }
+                ctx.stroke();
+
+                // Kepala
+                ctx.beginPath(); ctx.fillStyle = '#c0392b'; ctx.arc(s.x, s.y, 6, 0, Math.PI*2); ctx.fill();
+                // Mata
+                ctx.fillStyle = 'white';
+                ctx.beginPath(); ctx.arc(s.x-2, s.y-2, 1.5, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(s.x+2, s.y-2, 1.5, 0, Math.PI*2); ctx.fill();
+                // Lidah
+                ctx.beginPath(); ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1.5;
+                ctx.moveTo(s.x, s.y + 6); ctx.lineTo(s.x - 2, s.y + 9); ctx.moveTo(s.x, s.y + 6); ctx.lineTo(s.x + 2, s.y + 9); ctx.stroke();
+            }
+        }
+
+        // --- Gameplay Logic ---
+
+        function getCenter(num) {
+            const cell = document.getElementById(`cell-${num}`);
+            if(!cell) return {x:0, y:0};
+            const rect = cell.getBoundingClientRect();
+            const boardRect = document.querySelector('.board-container').getBoundingClientRect();
+            return {
+                x: ((rect.left - boardRect.left) / boardRect.width) * 100,
+                y: ((rect.top - boardRect.top) / boardRect.height) * 100
+            };
+        }
+
+        function updatePositions(animate = true) {
+            players.forEach((p, idx) => {
+                const coords = getCenter(p.pos);
+                let offsetX = 0, offsetY = 0;
+                if (players.length > 2) {
+                    const angles = [0, 90, 180, 270];
+                    const rad = angles[idx] * (Math.PI / 180);
+                    offsetX = Math.cos(rad) * 3;
+                    offsetY = Math.sin(rad) * 3;
+                } else {
+                    if (idx === 1) { offsetX = 3; offsetY = 3; }
+                }
+                p.element.style.left = `calc(${coords.x}% + ${offsetX}px)`;
+                p.element.style.top = `calc(${coords.y}% + ${offsetY}px)`;
+                document.getElementById(`p-pos-${idx}`).innerText = p.pos;
+
+                if (animate) {
+                    p.element.classList.remove('hopping');
+                    void p.element.offsetWidth; 
+                    p.element.classList.add('hopping');
+                }
+            });
+        }
+
+        function updateStatus() {
+            players.forEach((p, i) => {
+                const card = document.getElementById(`p-card-${i}`);
+                if (i === currentPlayerIndex) card.classList.add('active');
+                else card.classList.remove('active');
+            });
+            const p = players[currentPlayerIndex];
+            document.getElementById('roll-btn').innerText = `Giliran: ${p.name}`;
+        }
+
+        function rollDice() {
+            if (isRolling || isMoving) return;
+            isRolling = true;
+            sfx.roll();
+
+            const result = Math.floor(Math.random() * 6) + 1;
+            let xRand = 720 + Math.floor(Math.random() * 360);
+            let yRand = 720 + Math.floor(Math.random() * 360);
+            let fx=0, fy=0;
+            switch(result) {
+                case 1: fx=0; fy=0; break;
+                case 2: fx=0; fy=-90; break;
+                case 3: fx=0; fy=-180; break;
+                case 4: fx=0; fy=90; break;
+                case 5: fx=-90; fy=0; break;
+                case 6: fx=90; fy=0; break;
+            }
+            document.getElementById('dice').style.transform = `rotateX(${xRand+fx}deg) rotateY(${yRand+fy}deg)`;
+
+            setTimeout(async () => {
+                addLog(`${players[currentPlayerIndex].name} dapat <b>${result}</b>`);
+                await movePlayer(result);
+            }, 1000);
+        }
+
+        async function movePlayer(steps) {
+            isMoving = true;
+            const p = players[currentPlayerIndex];
+            let target = p.pos + steps;
+
+            if (target > 100) {
+                addLog("Kelebihan!", "log-bad");
+                endTurn(); return;
+            }
+
+            p.element.classList.add('walking');
+
+            for (let i = 1; i <= steps; i++) {
+                p.pos++;
+                updatePositions(true); 
+                sfx.step();
+                await new Promise(r => setTimeout(r, 250));
+            }
+
+            p.element.classList.remove('walking');
+
+            let special = false;
+            if (snakes[p.pos]) {
+                addLog("Kena ular!", "log-bad");
+                sfx.snake();
+                p.pos = snakes[p.pos];
+                special = true;
+            } else if (ladders[p.pos]) {
+                addLog("Naik tangga!", "log-good");
+                sfx.ladder();
+                p.pos = ladders[p.pos];
+                special = true;
+            }
+
+            if (special) {
+                updatePositions(false); 
+                await new Promise(r => setTimeout(r, 600));
+            }
+
+            if (p.pos === 100) {
+                gameWin(p);
+            } else {
+                endTurn();
+            }
+        }
+
+        function endTurn() {
+            currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+            isRolling = false;
+            isMoving = false;
+            updateStatus();
+        }
+
+        function gameWin(winner) {
+            sfx.win();
+            document.getElementById('winner-text').innerText = `${winner.name} MENANG!`;
+            document.getElementById('winner-text').style.color = winner.color;
+            document.getElementById('win-modal').classList.add('show');
+        }
+
+        function addLog(html) {
+            const box = document.getElementById('game-log');
+            box.innerHTML = `<div class="log-entry">${html}</div>` + box.innerHTML;
+        }
+
+        // Handle Resize untuk Canvas
+        window.addEventListener('resize', () => {
+            drawVisuals();
+            updatePositions(false);
+        });
+
+    </script>
+</body>
+</html>
